@@ -1,11 +1,11 @@
-import os  # Import for reading environment variables
+import os
 import requests
 from bs4 import BeautifulSoup
 import hashlib
-import time
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import time
 
 # URL to monitor
 url = "https://www.stwdo.de/wohnen/aktuelle-wohnangebote"
@@ -13,13 +13,17 @@ url = "https://www.stwdo.de/wohnen/aktuelle-wohnangebote"
 # Email details
 smtp_server = "smtp.gmail.com"
 smtp_port = 587
-sender_email = "mishrasiddhant911@gmail.com"  # Replace with your email
-recipient_email = "mishrasiddhant911@gmail.com"  # Replace with recipient email
+sender_email = "mishrasiddhant911@gmail.com"  # Replace with your sender email
+recipient_email = "mishrasiddhant911@gmail.com"  # Replace with your recipient email
+sender_password = os.getenv("EMAIL_PASSWORD")  # Fetch the password from GitHub Secrets
 
-# Get the email password from GitHub Secrets
-sender_password = os.getenv("EMAIL_PASSWORD")  # Fetches the secret value
+# File to store the previous hash
+hash_file = "hash.txt"
 
 def send_email_notification():
+    """
+    Sends an email notification when a change is detected.
+    """
     try:
         msg = MIMEMultipart()
         msg['From'] = sender_email
@@ -37,29 +41,62 @@ def send_email_notification():
     except Exception as e:
         print(f"❌ Failed to send email: {e}")
 
-# Initial hash
-previous_hash = ""
-
-while True:
+def get_current_hash():
+    """
+    Fetches the website content and returns its hash.
+    """
     try:
-        # Get page content
-        response = requests.get(url)
+        print("Fetching website content...")
+        response = requests.get(url, timeout=10)  # Set timeout to avoid hanging
         soup = BeautifulSoup(response.content, "html.parser")
         current_content = soup.get_text()  # Extract text content
-
-        # Create a hash of the content
         current_hash = hashlib.md5(current_content.encode("utf-8")).hexdigest()
-
-        # Compare hashes
-        if previous_hash and current_hash != previous_hash:
-            print("🚨 Change detected!")
-            send_email_notification()
-
-        previous_hash = current_hash
-
-        # Wait 10 minutes before checking again
-        time.sleep(300)
-
+        print("✅ Website content fetched and hashed.")
+        return current_hash
     except Exception as e:
-        print(f"❌ Error: {e}")
-        time.sleep(30)
+        print(f"❌ Failed to fetch website content: {e}")
+        return None
+
+def load_previous_hash():
+    """
+    Loads the previous hash from the hash file, if it exists.
+    """
+    if os.path.exists(hash_file):
+        with open(hash_file, "r") as f:
+            return f.read().strip()
+    return ""
+
+def save_current_hash(current_hash):
+    """
+    Saves the current hash to the hash file.
+    """
+    with open(hash_file, "w") as f:
+        f.write(current_hash)
+
+def main():
+    """
+    Main function to check for changes and send notifications if necessary.
+    """
+    # Load the previous hash
+    previous_hash = load_previous_hash()
+
+    # Get the current hash
+    current_hash = get_current_hash()
+    if current_hash is None:
+        print("❌ Skipping check due to error fetching website.")
+        return
+
+    # Compare hashes and send email if changed
+    if previous_hash and current_hash != previous_hash:
+        print("🚨 Change detected! Sending notification...")
+        send_email_notification()
+    else:
+        print("✅ No changes detected.")
+
+    # Save the current hash for future comparisons
+    save_current_hash(current_hash)
+    print("✅ Monitoring check completed.")
+
+# Run the main function
+if __name__ == "__main__":
+    main()
