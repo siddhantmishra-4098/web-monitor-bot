@@ -58,7 +58,7 @@ while True:
         previous_hash = current_hash
 
         # Wait 10 minutes before checking again
-        time.sleep(60)
+        time.sleep(300)
 
     except Exception as e:
         print(f"❌ Error: {e}")
